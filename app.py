@@ -8,7 +8,8 @@ from flask_migrate import Migrate
 import os
 import json
 import bcrypt
-
+from werkzeug.utils import secure_filename
+from flask import send_from_directory
 from dotenv import load_dotenv
 load_dotenv('./.env')
 
@@ -18,6 +19,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URI')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['PERMANENT_SESSION_LIFETIME'] = 1800
+app.config['UPLOAD_FOLDER'] = os.environ.get('UPLOAD_FOLDER')
+ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif'}
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db , compare_type=True , render_as_batch = True)
@@ -66,10 +69,12 @@ def _corsify_actual_response(response):
     response.headers.add("Access-Control-Allow-Origin", "*")
     return response
 
-################################################################
-
-
-# queue = []
+#####################################################################################################################
+##########################################################################################################
+#############################################################################################################################################################
+##########################################################################################################
+##########################################################################################################
+#Email OTP Section
 email_dict= {}
 import random
 def otp_generater(email):
@@ -86,7 +91,7 @@ def check(email , otp):
         print("yay! you are verified")
         return True
     return False
-        
+
 #routes
 @app.route('/index', methods=['POST'])
 def index():
@@ -125,9 +130,9 @@ def index():
                     #email has been verified!
                     hashed = bcrypt.hashpw(password.encode("utf-8"),bcrypt.gensalt())
                     print(hashed)
-                    # if email.split('@')[1]!= 'kiet.edu':
-                    #     res['msg'] = "kindly enter kiet email!!"
-                    #     return res , 404
+                    if email.split('@')[1]!= 'kiet.edu':
+                        res['msg'] = "kindly enter kiet email!!"
+                        return res , 404
                     if email in ['ritika.1923cs1076@kiet.edu' , 'sammerahmad.1923cs1100@kiet.edu']:
                         user = User(name = name, password=hashed , email = email , gender = gender , is_admin = True)
                         session['admin'] = True
@@ -254,8 +259,53 @@ def verify():
     elif (check(email , otp)):
         return "verified redirect to the home page / login succes" , 200
     return "kindly enter correct otp" , 404
-        
+###################################333
+###################################333
+###################################333
+##############request help section#############
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+@app.route('/uploads/<name>')
+def download_file(name):
+    return send_from_directory(app.config["UPLOAD_FOLDER"], name)
+       
+@login_required
+@app.route("/request_help", methods = ['POST'])
+def request_help():
+    if request.method == 'POST':
+        print(request.files.getlist)
+        data = request.get_json(force=True)  
+        upi_id = data['upi_id']
+        acc_no = data['acc_no']
+        acc_holder_name = data['acc_holder_name']
+        category_help = data['category_help']
+        ifsc = data['ifsc']
+        if 'phone' in data:
+            phone = data['phone']
+        if 'gpay' in data:
+            gpay = data['gpay']
+        if 'amazon_pay' in data:
+            amazon_pay = data['amazon_pay']        
+        if 'paytm' in data:
+            paytm = data['paytm']        
+        if 'phone_pay' in data:
+            phone_pay = data['phone_pay']
+        print(upi_id , acc_no , acc_holder_name , ifsc  , category_help)
+        if 'file' in request.files:
+            file = request.files['file']
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            return 'file uploaded successfully'
+        return "invalid file format"
 ##############################3########33
+
+##notifications section##
+@login_required
+@app.route('/notifications' , methods = ['GET'])
+def notification():
+    return render_template('notification.html') , 200
     
 if __name__ == "__main__":
     db.create_all()

@@ -50,9 +50,17 @@ class User(db.Model , UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(25), nullable=False)
     gender = db.Column(db.String(25),  nullable=False)
-    password = db.Column(db.String(), nullable=False)
+    password = db.Column(db.String(256), nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     email = db.Column(db.String(120),unique = True ,nullable=False)
+    requests = db.relationship('UserRequest', backref='user')
+
+class UserRequest(db.Model , UserMixin):
+    __tablename__ = "userrequests"
+    id =db.Column(db.Integer, primary_key=True)
+    request_type=db.Column(db.String(200), nullable=False)
+    request_type_name = db.Column(db.String(200), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
 #####################################################################
 
 
@@ -160,7 +168,7 @@ def login():
         password = data["password"]
         email = data["email"]
         user = User.query.filter_by(email = email).first()
-        hashed = bcrypt.checkpw(password.encode('utf8') ,user.password)
+        hashed = bcrypt.checkpw(password.encode('utf8') ,user.password.encode('utf-8'))
         print(hashed)
         if hashed:
             #login the user
@@ -198,7 +206,7 @@ def change_password():
         email = data['email']
         curr_pass = data['current_pass']
         new_pass = data['new_pass']
-        hashed = bcrypt.checkpw(curr_pass.encode('utf8') ,current_user.password)
+        hashed = bcrypt.checkpw(curr_pass.encode('utf8') ,current_user.password.encode('utf8'))
         
         if hashed:
             new_pass_hashed = bcrypt.hashpw(new_pass.encode("utf-8"),bcrypt.gensalt())
@@ -306,13 +314,7 @@ def request_help():
             paytm = data['paytm']        
         if 'phone_pay' in data:
             phone_pay = data['phone_pay']
-        print(upi_id , acc_no , acc_holder_name , ifsc  , category_help)
-        # if 'file' in request.files:
-        #     file = request.files['file']
-        # if file and allowed_file(file.filename):
-        #     filename = secure_filename(file.filename)
-        #     file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-        #     return 'file uploaded successfully'
+        # print(upi_id , acc_no , acc_holder_name , ifsc  , category_help)
         return "request sent successfully"
 ##############################3########33
 

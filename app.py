@@ -269,7 +269,22 @@ def allowed_file(filename):
 @app.route('/uploads/<name>')
 def download_file(name):
     return send_from_directory(app.config["UPLOAD_FOLDER"], name)
-       
+
+@login_required
+@app.route('/upload' , methods = ['POST'])     
+def upload_file():
+    # print("request-data" ,request.data)
+    # print(request.headers)
+    # print("\nrequest.files" ,request.files) 
+    # print(request.json)
+    file = request.files['file']
+    # print(type(file))
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        return 'file uploaded successfully' , 200
+    return "file upload failed"
+        
 @login_required
 @app.route("/request_help", methods = ['POST'])
 def request_help():
@@ -292,13 +307,13 @@ def request_help():
         if 'phone_pay' in data:
             phone_pay = data['phone_pay']
         print(upi_id , acc_no , acc_holder_name , ifsc  , category_help)
-        if 'file' in request.files:
-            file = request.files['file']
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            return 'file uploaded successfully'
-        return "invalid file format"
+        # if 'file' in request.files:
+        #     file = request.files['file']
+        # if file and allowed_file(file.filename):
+        #     filename = secure_filename(file.filename)
+        #     file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        #     return 'file uploaded successfully'
+        return "request sent successfully"
 ##############################3########33
 
 ##notifications section##

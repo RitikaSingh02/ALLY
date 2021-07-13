@@ -55,6 +55,7 @@ class User(db.Model , UserMixin):
     email = db.Column(db.String(120),unique = True ,nullable=False)
     requests = db.relationship('UserRequest', backref='user')
     is_verified = db.Column(db.Boolean, default=False, nullable=False)
+    profile_pic = db.Column(db.String(200), nullable=True)
 
 class UserRequest(db.Model , UserMixin):
     __tablename__ = "userrequests"
@@ -62,18 +63,19 @@ class UserRequest(db.Model , UserMixin):
     request_type=db.Column(db.String(200), nullable=False)
     request_type_name = db.Column(db.String(200), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    
 class UserFcms(db.Model , UserMixin):
     __tablename__ = "fcms"
     id =db.Column(db.Integer, primary_key=True)
     fcm_token = db.Column(db.String(200),unique = True , nullable=False)
     device_id = db.Column(db.String(200),unique = True , nullable=False)
-    email = db.Column(db.String(200), db.ForeignKey('users.email'))
+    email = db.Column(db.String(200), db.ForeignKey('users.email'))       
 #####################################################################
 #cloudinary config
 import cloudinary
 import cloudinary.uploader
 cloudinary.config( 
-  cloud_name = "sample", 
+  cloud_name = os.environ.get("cloud_name"),
   api_key = os.environ.get("api_key"), 
   api_secret = os.environ.get('api_secret')
 )
@@ -301,19 +303,14 @@ def download_file(name):
 @login_required
 @app.route('/upload' , methods = ['POST'])     
 def upload_file():
-    # print("request-data" ,request.data)
-    # print(request.headers)
-    # print("\nrequest.files" ,request.files) 
-    # print(request.json)
     file = request.files['file']
-    upload_result = cloudinary.uploader.upload(file)
-    app.logger.info(upload_result)
-    # return jsonify(upload_result)
-    # cloudinary.uploader.upload(shit, 
-    # public_id = "sample_woman")
-    # print(type(file))
+    email = current_user.email
     if allowed_file(file.filename):
         filename = secure_filename(file.filename)
+        upload_result = cloudinary.uploader.upload(file)
+        user = User.query.filter_by(email = email).first()
+        user.profile_pic = upload_result['url']
+        db.session.commit()
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
         return 'file uploaded successfully' , 200
     return "file upload failed"

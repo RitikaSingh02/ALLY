@@ -54,6 +54,7 @@ class User(db.Model , UserMixin):
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     email = db.Column(db.String(120),unique = True ,nullable=False)
     requests = db.relationship('UserRequest', backref='user')
+    is_verified = db.Column(db.Boolean, default=False, nullable=False)
 
 class UserRequest(db.Model , UserMixin):
     __tablename__ = "userrequests"
@@ -61,8 +62,21 @@ class UserRequest(db.Model , UserMixin):
     request_type=db.Column(db.String(200), nullable=False)
     request_type_name = db.Column(db.String(200), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+class UserFcms(db.Model , UserMixin):
+    __tablename__ = "fcms"
+    id =db.Column(db.Integer, primary_key=True)
+    fcm_token = db.Column(db.String(200),unique = True , nullable=False)
+    device_id = db.Column(db.String(200),unique = True , nullable=False)
+    email = db.Column(db.String(200), db.ForeignKey('users.email'))
 #####################################################################
-
+#cloudinary config
+import cloudinary
+import cloudinary.uploader
+cloudinary.config( 
+  cloud_name = "sample", 
+  api_key = os.environ.get("api_key"), 
+  api_secret = os.environ.get('api_secret')
+)
 
 #Cors removing func
 def _build_cors_prelight_response():
@@ -73,9 +87,9 @@ def _build_cors_prelight_response():
     return response
 
 
-def _corsify_actual_response(response):
-    response.headers.add("Access-Control-Allow-Origin", "*")
-    return response
+# def _corsify_actual_response(response):
+#     response.headers.add("Access-Control-Allow-Origin", "*")
+#     return response
 
 #####################################################################################################################
 ##########################################################################################################
@@ -115,43 +129,47 @@ def index():
             password = data["password"]
             email = data["email"]
             session['admin'] = False
-            
             res = {}
-            # user_object = User.query.filter_by(password=password ,email = email).first()
-            
+            user = User.query.filter_by(email = email).first()
+            if user is not None and user.is_verified is False :
+                #email has to be verified
+                email_verification(email)
             if User.query.filter_by(email = email).first() is not None:
                 #user exists
                 res['msg'] = "the user already exists return  to the login page"
                 res['exists'] = 1
+                res['verified'] = User.query.filter_by(email = email).first().is_verified
                 if email in ['ritika.1923cs1076@kiet.edu' , 'sameer.1923co1066@kiet.edu']:
                     session['admin'] = True
                 res['admin'] = session['admin']
-                return _corsify_actual_response(jsonify(res)), 401
+                return jsonify(res), 401
             else:
                 #register the user and login it
                 res['msg'] = "new user logged in "
                 res['exists'] = 0
-                #call the email generator api
-                if 'otp' not in data:
-                    return "kindly verify your email" , 404
-                else:
-                    #email has been verified!
-                    hashed = bcrypt.hashpw(password.encode("utf-8"),bcrypt.gensalt())
-                    print(hashed)
-                    if email.split('@')[1]!= 'kiet.edu':
-                        res['msg'] = "kindly enter kiet email!!"
-                        return res , 404
-                    if email in ['ritika.1923cs1076@kiet.edu' , 'sammerahmad.1923cs1100@kiet.edu']:
-                        user = User(name = name, password=hashed , email = email , gender = gender , is_admin = True)
-                        session['admin'] = True
-                    else:
-                        user = User(name = name, password=hashed , email = email , gender = gender)
+                hashed = bcrypt.hashpw(password.encode("utf-8"),bcrypt.gensalt())
+                if email.split('@')[1]!= 'kiet.edu':
+                    res['msg'] = "kindly enter kiet email!!"
+                    return res , 404
+                if email in ['ritika.1923cs1076@kiet.edu' , 'sammerahmad.1923cs1100@kiet.edu']:
+                    user = User(name = name, password=hashed , email = email , gender = gender , is_admin = True )
                     db.session.add(user)
                     db.session.commit()
-                    login_user(user)
-                    res['admin'] = session['admin']
+                    session['admin'] = True
+                else:
+                    user = User(name = name, password=hashed , email = email , gender = gender )
+                    db.session.add(user)
+                    db.session.commit()
+
+                user = User.query.filter_by(email = email).first()
+                #call the email generator api
+                if not user.is_verified:
+                    #email has to be verified
+                    email_verification(email)
+                    return jsonify("mail sent") , 200
+            return jsonify("kindly verify your email"), 404
                     
-                    return _corsify_actual_response(jsonify(res)), 200
+
         
 @app.route('/login', methods=['POST'])
 def login():
@@ -164,7 +182,7 @@ def login():
         data = request.get_json(force=True)
         if 'email' not in data or 'password' not in data:
             res['msg'] = 'Bad Request'
-            return _corsify_actual_response(jsonify(res)), 400
+            return jsonify(res), 400
         password = data["password"]
         email = data["email"]
         user = User.query.filter_by(email = email).first()
@@ -174,10 +192,11 @@ def login():
             #login the user
             login_user(user)
             res['msg'] = "login success"
-            return _corsify_actual_response(jsonify(res)), 200
+            session['admin'] = user.is_admin
+            return jsonify(res), 200
         else:
             res['msg'] = "Invalid credentials"
-            return _corsify_actual_response(jsonify(res)), 401
+            return jsonify(res), 401
 
 @app.route("/logout", methods=['GET'])
 @login_required
@@ -188,7 +207,7 @@ def logout():
     res = {
         'msg' : 'logout success'
     }
-    return res , 200
+    return jsonify(res) , 200
 
 @app.route("/passwordchange", methods=[ 'POST'])
 @login_required
@@ -202,7 +221,7 @@ def change_password():
         data = request.get_json(force=True)      
         if 'email' not in data or 'current_pass' not in data or 'new_pass' not in data:
             res['msg'] = 'Bad Request'
-            return _corsify_actual_response(jsonify(res)), 400
+            return jsonify(res), 400
         email = data['email']
         curr_pass = data['current_pass']
         new_pass = data['new_pass']
@@ -213,9 +232,9 @@ def change_password():
             query = User.query.filter_by(email = email).update(dict(password = new_pass_hashed))
             db.session.commit()
             res['msg'] = "change password successfull"
-            return  _corsify_actual_response(jsonify(res)), 200
+            return  jsonify(res), 200
         res['msg'] = "enter correct original pass"
-        return  _corsify_actual_response(jsonify(res)), 200
+        return  jsonify(res), 200
 
 @app.route('/profile', methods=[ 'GET'])
 @login_required
@@ -240,33 +259,34 @@ app.config['MAIL_PASSWORD'] = os.environ.get('PASSWORD')
 app.config['MAIL_USE_TLS'] = False
 app.config['MAIL_USE_SSL'] = True
 mail = Mail(app)
-@app.route("/mail" , methods = ['POST'])
-def email_verification():   
-    if request.method == "OPTIONS":  # CORS preflight
-        return _build_cors_prelight_response()
-    else:
-        data = request.get_json(force=True)      
-        email = data['email']
-        msg = Message('Kindly Verify Your Email To Proceed', sender = os.environ.get('MAIL'), recipients = [email])
-        msg.body = "This is the email body"
-        id = '1'
-        msg.attach('mail.png','image/gif',open('./static/mail.png', 'rb').read(), 'inline', headers=[['Content-ID','<id>'],])
-        #call the otp generator
-        otp = otp_generater(email)
-        msg.html = render_template('verify.html' , otp=otp , id = '<'+id+'>')
-        mail.send(msg)
-        return "Sent"
+
+def email_verification(email):   
+    msg = Message('Kindly Verify Your Email To Proceed', sender = os.environ.get('MAIL'), recipients = [email])
+    msg.body = "This is the email body"
+    id = '1'
+    msg.attach('mail.png','image/gif',open('./static/mail.png', 'rb').read(), 'inline', headers=[['Content-ID','<id>'],])
+    #call the otp generator
+    otp = otp_generater(email)
+    msg.html = render_template('verify.html' , otp=otp , id = '<'+id+'>')
+    mail.send(msg)
     
 @app.route("/verify", methods = ['POST'])
 def verify():
     data = request.get_json(force=True)      
     email = data['email']
     otp = data['otp']
-    if request.method == "OPTIONS":  # CORS preflight
-        return _build_cors_prelight_response()
-    elif (check(email , otp)):
-        return "verified redirect to the home page / login succes" , 200
-    return "kindly enter correct otp" , 404
+    user = User.query.filter_by(email = email).first()
+    res = {}
+    res['msg'] = "not verified"
+    res['verified'] = user.is_verified
+    if (check(email , otp)):
+            user.is_verified = True
+            db.session.commit()
+            res['msg'] = "verified"
+            res['verified'] = user.is_verified
+            return jsonify(res), 200
+    return jsonify(res), 404
+    
 ###################################333
 ###################################333
 ###################################333
@@ -286,8 +306,13 @@ def upload_file():
     # print("\nrequest.files" ,request.files) 
     # print(request.json)
     file = request.files['file']
+    upload_result = cloudinary.uploader.upload(file)
+    app.logger.info(upload_result)
+    # return jsonify(upload_result)
+    # cloudinary.uploader.upload(shit, 
+    # public_id = "sample_woman")
     # print(type(file))
-    if file and allowed_file(file.filename):
+    if allowed_file(file.filename):
         filename = secure_filename(file.filename)
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
         return 'file uploaded successfully' , 200
@@ -315,13 +340,31 @@ def request_help():
         if 'phone_pay' in data:
             phone_pay = data['phone_pay']
         # print(upi_id , acc_no , acc_holder_name , ifsc  , category_help)
-        return "request sent successfully"
+        return jsonify("request sent successfully") , 200   
 ##############################3########33
 
 ##notifications section##
 @login_required
+@app.route('/fcm-insert' , methods = ['POST'])
+def fcm_insert():
+    res = {}
+    data = request.get_json(force=True)  
+    fcm_token = data['fcm_token']
+    device_id = data['device_id']
+    email = data['email']
+    fcm = UserFcms(fcm_token = fcm_token , device_id = device_id , email = email)
+    db.session.add(fcm)
+    db.session.commit()
+    res['msg'] = "fcm inserted"
+    return jsonify(res), 200
+    
+    
+@login_required
 @app.route('/notifications' , methods = ['GET'])
 def notification():
+    data = request.get_json(force=True)  
+    fcm_token = data['fcm_token']
+    device = data['device']
     return render_template('notification.html') , 200
     
 if __name__ == "__main__":

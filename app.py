@@ -53,17 +53,32 @@ class User(db.Model , UserMixin):
     password = db.Column(db.String(256), nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     email = db.Column(db.String(120),unique = True ,nullable=False)
-    requests = db.relationship('UserRequest', backref='user')
     is_verified = db.Column(db.Boolean, default=False, nullable=False)
     profile_pic = db.Column(db.String(200), nullable=True)
 
+
+class UserRequestTypes(db.Model , UserMixin):
+    __tablename__ = "requestcategory"
+    id =db.Column(db.Integer, primary_key=True)
+    request_type_name =  db.Column(db.String(200), nullable= False)
+    
+    
 class UserRequest(db.Model , UserMixin):
     __tablename__ = "userrequests"
     id =db.Column(db.Integer, primary_key=True)
-    request_type=db.Column(db.String(200), nullable=False)
-    request_type_name = db.Column(db.String(200), nullable=False)
+    request_type=db.Column(db.Integer, db.ForeignKey('requestcategory.id'))
+    request_description  = db.Column(db.String(200), nullable=False)
+    acc_holder_name = db.Column(db.String(200), nullable= True)
+    phone = db.Column(db.String(200), nullable= True)
+    ifsc = db.Column(db.String(200), nullable= True)
+    acc_no = db.Column(db.String(200), nullable= True)
+    upi_id = db.Column(db.String(200), nullable= True)
+    gpay = db.Column(db.String(200), nullable= True)
+    amazon_pay = db.Column(db.String(200), nullable= True)
+    paytm = db.Column(db.String(200), nullable= True)
+    phone_pay = db.Column(db.String(200), nullable= True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
-    
+   
 class UserFcms(db.Model , UserMixin):
     __tablename__ = "fcms"
     id =db.Column(db.Integer, primary_key=True)
@@ -325,18 +340,27 @@ def request_help():
         acc_no = data['acc_no']
         acc_holder_name = data['acc_holder_name']
         category_help = data['category_help']
+        request_description = data['request_description']
         ifsc = data['ifsc']
-        if 'phone' in data:
-            phone = data['phone']
-        if 'gpay' in data:
-            gpay = data['gpay']
-        if 'amazon_pay' in data:
-            amazon_pay = data['amazon_pay']        
-        if 'paytm' in data:
-            paytm = data['paytm']        
-        if 'phone_pay' in data:
-            phone_pay = data['phone_pay']
-        # print(upi_id , acc_no , acc_holder_name , ifsc  , category_help)
+        phone = data['phone']
+        gpay = data['gpay']
+        amazon_pay = data['amazon_pay']        
+        paytm = data['paytm']        
+        phone_pay = data['phone_pay']
+        user = UserRequest(request_type = category_help , 
+                           request_description = request_description , 
+                           acc_holder_name = acc_holder_name,
+                           phone = phone,
+                           ifsc = ifsc,
+                           acc_no = acc_no,
+                           upi_id = upi_id,
+                           gpay = gpay,
+                           amazon_pay = amazon_pay,
+                           paytm = paytm,
+                           phone_pay = phone_pay,
+                           user_id = current_user.id)
+        db.session.add(user)
+        db.session.commit()
         return jsonify("request sent successfully") , 200   
 ##############################3########33
 

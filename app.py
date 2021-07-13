@@ -84,7 +84,8 @@ class UserFcms(db.Model , UserMixin):
     id =db.Column(db.Integer, primary_key=True)
     fcm_token = db.Column(db.String(200),unique = True , nullable=False)
     device_id = db.Column(db.String(200),unique = True , nullable=False)
-    email = db.Column(db.String(200), db.ForeignKey('users.email'))       
+    email = db.Column(db.String(200), db.ForeignKey('users.email'))    
+    status = db.Column(db.String(200), default = "INSERT")
 #####################################################################
 #cloudinary config
 import cloudinary
@@ -265,6 +266,7 @@ def profile():
             res['name'] = current_user.name
             res['gender'] = current_user.gender
             res['email'] = current_user.email
+            res['profile_pic'] = current_user.profile_pic
             return res , 200
         
 ###################Sending mails##################3
@@ -373,12 +375,24 @@ def fcm_insert():
     fcm_token = data['fcm_token']
     device_id = data['device_id']
     email = data['email']
-    fcm = UserFcms(fcm_token = fcm_token , device_id = device_id , email = email)
+    fcm = UserFcms(fcm_token = fcm_token , device_id = device_id , email = email , status = "INSERT")
     db.session.add(fcm)
     db.session.commit()
     res['msg'] = "fcm inserted"
     return jsonify(res), 200
     
+@login_required
+@app.route('/fcm-insert' , methods = ['POST'])
+def fcm_del():
+    res = {}
+    data = request.get_json(force=True)
+    fcm_token = data['fcm_token']
+    device_id = data['device_id']
+    fcm = UserFcms.query.filter_by(fcm_token = fcm_token , device_id = device_id).first()
+    fcm.status = "DELETE"
+    db.session.commit()
+    res['msg'] = "fcm deleted successfully"
+    return jsonify(res) , 200
     
 @login_required
 @app.route('/notifications' , methods = ['GET'])

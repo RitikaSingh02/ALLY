@@ -67,6 +67,7 @@ class UserRequest(db.Model , UserMixin):
     __tablename__ = "userrequests"
     id =db.Column(db.Integer, primary_key=True)
     request_type=db.Column(db.Integer, db.ForeignKey('requestcategory.id'))
+    title = db.Column(db.String(200), nullable=True)
     request_description  = db.Column(db.String(200), nullable=False)
     acc_holder_name = db.Column(db.String(200), nullable= True)
     phone = db.Column(db.String(200), nullable= True)
@@ -77,7 +78,11 @@ class UserRequest(db.Model , UserMixin):
     amazon_pay = db.Column(db.String(200), nullable= True)
     paytm = db.Column(db.String(200), nullable= True)
     phone_pay = db.Column(db.String(200), nullable= True)
+    image =  db.Column(db.String(200), nullable= True)
+    status = db.Column(db.String(200) , nullable = True)
+    remark =  db.Column(db.String(200), nullable= True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    
    
 class UserFcms(db.Model , UserMixin):
     __tablename__ = "fcms"
@@ -211,6 +216,7 @@ def login():
             login_user(user)
             res['msg'] = "login success"
             session['admin'] = user.is_admin
+            res['admin'] = session['admin']
             return jsonify(res), 200
         else:
             res['msg'] = "Invalid credentials"
@@ -322,34 +328,54 @@ def download_file(name):
 def upload_file():
     file = request.files['file']
     email = current_user.email
+    res = {}
+    res['msg'] = "failed"
+    res['url'] = ""
     if allowed_file(file.filename):
         filename = secure_filename(file.filename)
         upload_result = cloudinary.uploader.upload(file)
         user = User.query.filter_by(email = email).first()
         user.profile_pic = upload_result['url']
         db.session.commit()
+        res['msg'] = "success"
+        res['url'] = upload_result['url']
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-        return 'file uploaded successfully' , 200
-    return "file upload failed"
-        
+        return jsonify(res) , 200
+    return jsonify(res) , 400
+
+@login_required
+@app.route("/request_category", methods = ['GET'])
+def request_category():
+    res = []
+    categories = UserRequestTypes.query.all()
+    for category in categories:
+        id = category.id
+        name = category.request_type_name
+        l = [id , name]
+        res.append(l)
+    return jsonify(res) , 200
 @login_required
 @app.route("/request_help", methods = ['POST'])
 def request_help():
     if request.method == 'POST':
-        print(request.files.getlist)
+        # print(request.files.getlist)
         data = request.get_json(force=True)  
         upi_id = data['upi_id']
         acc_no = data['acc_no']
         acc_holder_name = data['acc_holder_name']
         category_help = data['category_help']
-        request_description = data['request_description']
+        request_description = data['description']
+        title = data['title']
         ifsc = data['ifsc']
         phone = data['phone']
         gpay = data['gpay']
         amazon_pay = data['amazon_pay']        
         paytm = data['paytm']        
         phone_pay = data['phone_pay']
+        image = data['file']
+        res = {}
         user = UserRequest(request_type = category_help , 
+                           title = title,
                            request_description = request_description , 
                            acc_holder_name = acc_holder_name,
                            phone = phone,
@@ -360,10 +386,13 @@ def request_help():
                            amazon_pay = amazon_pay,
                            paytm = paytm,
                            phone_pay = phone_pay,
+                           image = image,
+                           status = "PENDING",
                            user_id = current_user.id)
         db.session.add(user)
         db.session.commit()
-        return jsonify("request sent successfully") , 200   
+        res['msg'] = "success"
+        return jsonify(res) , 200   
 ##############################3########33
 
 ##notifications section##
@@ -375,14 +404,19 @@ def fcm_insert():
     fcm_token = data['fcm_token']
     device_id = data['device_id']
     email = data['email']
-    fcm = UserFcms(fcm_token = fcm_token , device_id = device_id , email = email , status = "INSERT")
-    db.session.add(fcm)
-    db.session.commit()
+    fcm = UserFcms.query.filter_by(fcm_token = fcm_token).first()
+    if fcm is not None:
+        fcm.status = "INSERT"
+        db.session.commit()
+    else:
+        fcm = UserFcms(fcm_token = fcm_token , device_id = device_id , email = email , status = "INSERT")
+        db.session.add(fcm)
+        db.session.commit()
     res['msg'] = "fcm inserted"
     return jsonify(res), 200
     
 @login_required
-@app.route('/fcm-insert' , methods = ['POST'])
+@app.route('/fcm-delete' , methods = ['POST'])
 def fcm_del():
     res = {}
     data = request.get_json(force=True)
@@ -397,11 +431,77 @@ def fcm_del():
 @login_required
 @app.route('/notifications' , methods = ['GET'])
 def notification():
-    data = request.get_json(force=True)  
-    fcm_token = data['fcm_token']
-    device = data['device']
-    return render_template('notification.html') , 200
-    
+    email =  current_user.email
+    fcm_token = list(UserFcms.query.filter_by(email = email).all())
+    print(fcm_token)
+    return render_template('notification.html' , fcm_token = fcm_token) , 200
+
+###aadmin panel###
+@login_required
+@app.route('/pending_requests' , methods = ['GET'])
+def pending_requests():
+    request_all = UserRequest.query.filter_by(status = "PENDING").all()
+    res = []
+    for req in request_all:
+        res.append(
+            {
+                "request_id" :req.id ,
+                "request_title" :req.title , 
+                "request_description":req.request_description ,
+                "request_type":req.request_type,
+                "acc_holder_name":req.acc_holder_name , 
+                "phone" :req.phone,
+                "ifsc": req.ifsc,
+                "user_id": req.user_id,
+                "acc_no" : req.acc_no,
+                "upi_id":req.upi_id,
+                "paytm": req.paytm,
+                "phone_pay":req.phone_pay,
+                "image":req.image
+            }
+        )
+    return jsonify(res) , 200
+
+@login_required
+@app.route('/requests_status_update' , methods = ['POST'])
+def requests_status():
+    data = request.get_json(force=True)
+    request_id = data['id']
+    request_status = data['status']
+    remark = data["remark"]
+    req = UserRequest.query.filter_by(id = request_id).first()
+    req.status = request_status
+    req.remark = remark
+    db.session.commit()
+    res= {'msg' : "request " + request_status}
+    return res , 200
+
+@login_required
+@app.route('/posts' , methods = ["GET"])
+def posts():
+    res = []
+    posts = UserRequest.query.filter_by(status = "APPROVED").all()
+    for req in posts:
+        res.append(
+                {
+                "request_id" :req.id ,
+                "request_title" :req.title , 
+                "request_description":req.request_description ,
+                "request_type":req.request_type,
+                "acc_holder_name":req.acc_holder_name , 
+                "phone" :req.phone,
+                "ifsc": req.ifsc,
+                "user_id": req.user_id,
+                "user_name": User.query.filter_by(id = req.user_id).first().name,
+                "acc_no" : req.acc_no,
+                "upi_id":req.upi_id,
+                "paytm": req.paytm,
+                "phone_pay":req.phone_pay,
+                "image":req.image
+            }
+        )
+    return jsonify(res) , 200
+
 if __name__ == "__main__":
     db.create_all()
     app.run(debug=True, port=8080)

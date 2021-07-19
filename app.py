@@ -324,8 +324,8 @@ def download_file(name):
     return send_from_directory(app.config["UPLOAD_FOLDER"], name)
 
 @login_required
-@app.route('/upload' , methods = ['POST'])     
-def upload_file():
+@app.route('/profile_pic_upload' , methods = ['POST'])     
+def profile_pic():
     file = request.files['file']
     email = current_user.email
     res = {}
@@ -337,6 +337,26 @@ def upload_file():
         user = User.query.filter_by(email = email).first()
         user.profile_pic = upload_result['url']
         db.session.commit()
+        res['msg'] = "success"
+        res['url'] = upload_result['url']
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        return jsonify(res) , 200
+    return jsonify(res) , 400
+
+@login_required
+@app.route('/upload' , methods = ['POST'])     
+def upload_file():
+    file = request.files['file']
+    email = current_user.email
+    res = {}
+    res['msg'] = "failed"
+    res['url'] = ""
+    if allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        upload_result = cloudinary.uploader.upload(file)
+        # user = User.query.filter_by(email = email).first()
+        # user.profile_pic = upload_result['url']
+        # db.session.commit()
         res['msg'] = "success"
         res['url'] = upload_result['url']
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
@@ -427,15 +447,30 @@ def fcm_del():
     db.session.commit()
     res['msg'] = "fcm deleted successfully"
     return jsonify(res) , 200
-    
+import subprocess
+
 @login_required
 @app.route('/notifications' , methods = ['GET'])
 def notification():
     email =  current_user.email
-    fcm_token = list(UserFcms.query.filter_by(email = email).all())
+    fcm_token = UserFcms.query.filter_by(email = email).first().fcm_token
     print(fcm_token)
-    return render_template('notification.html' , fcm_token = fcm_token) , 200
+    # if the script don't need output.
+    result = subprocess.run(
+        ['php', './form/notification.php'],    # program and arguments
+        stdout=subprocess.PIPE,  # capture stdout
+        check=True               # raise exception if program fails
+    )
+    # print(result)
+    return jsonify('notification sent' ) , 200
 
+def notify(msg):
+    # if the script don't need output.
+    result = subprocess.run(
+        ['php', './form/notification.php'],    # program and arguments
+        stdout=subprocess.PIPE,  # capture stdout
+        check=True               # raise exception if program fails
+    )
 ###aadmin panel###
 @login_required
 @app.route('/pending_requests' , methods = ['GET'])
@@ -473,7 +508,9 @@ def requests_status():
     req.status = request_status
     req.remark = remark
     db.session.commit()
-    res= {'msg' : "request " + request_status}
+    res= {'msg' : "Your help request is" + request_status}
+    if(request_status == "ACCEPTED"):
+        notify(res['msg'])
     return res , 200
 
 @login_required
@@ -497,11 +534,40 @@ def posts():
                 "upi_id":req.upi_id,
                 "paytm": req.paytm,
                 "phone_pay":req.phone_pay,
-                "image":req.image
+                "image":req.image,
+                "amazon_pay":req.amazon_pay,
+                "gpay":req.gpay
             }
         )
     return jsonify(res) , 200
-
+@login_required
+@app.route('/my_requests' , methods = ["GET"])
+def my_requests():
+    res = []
+    user_req = UserRequest.query.filter_by(user_id = current_user.id).all()
+    for req in user_req:
+        res.append(
+                {
+                "request_id" :req.id ,
+                "request_title" :req.title , 
+                "request_description":req.request_description ,
+                "request_type":req.request_type,
+                "acc_holder_name":req.acc_holder_name , 
+                "phone" :req.phone,
+                "ifsc": req.ifsc,
+                "user_id": req.user_id,
+                "user_name": User.query.filter_by(id = req.user_id).first().name,
+                "acc_no" : req.acc_no,
+                "upi_id":req.upi_id,
+                "paytm": req.paytm,
+                "phone_pay":req.phone_pay,
+                "image":req.image,
+                "amazon_pay":req.amazon_pay,
+                "gpay":req.gpay
+            }
+        )
+    return jsonify(res) , 200
+            
 if __name__ == "__main__":
     db.create_all()
     app.run(debug=True, port=8080)

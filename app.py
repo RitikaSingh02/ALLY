@@ -4,7 +4,7 @@ from flask.helpers import url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, current_user, login_required ,UserMixin
 from flask_migrate import Migrate
-
+import requests
 import os
 import json
 import bcrypt
@@ -55,6 +55,8 @@ class User(db.Model , UserMixin):
     email = db.Column(db.String(120),unique = True ,nullable=False)
     is_verified = db.Column(db.Boolean, default=False, nullable=False)
     profile_pic = db.Column(db.String(200), nullable=True)
+    profile_pic_height = db.Column(db.String(200), nullable= True)
+    profile_pic_width = db.Column(db.String(200), nullable= True)
 
 
 class UserRequestTypes(db.Model , UserMixin):
@@ -79,6 +81,8 @@ class UserRequest(db.Model , UserMixin):
     paytm = db.Column(db.String(200), nullable= True)
     phone_pay = db.Column(db.String(200), nullable= True)
     image =  db.Column(db.String(200), nullable= True)
+    height = db.Column(db.String(200), nullable= True)
+    width = db.Column(db.String(200), nullable= True)
     status = db.Column(db.String(200) , nullable = True)
     remark =  db.Column(db.String(200), nullable= True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
@@ -216,6 +220,7 @@ def login():
             login_user(user)
             res['msg'] = "login success"
             session['admin'] = user.is_admin
+            session.permanent = True
             res['admin'] = session['admin']
             return jsonify(res), 200
         else:
@@ -334,11 +339,16 @@ def profile_pic():
     if allowed_file(file.filename):
         filename = secure_filename(file.filename)
         upload_result = cloudinary.uploader.upload(file)
+        print(upload_result)
         user = User.query.filter_by(email = email).first()
         user.profile_pic = upload_result['url']
+        user.profile_pic_height = upload_result['height']
+        user.profile_pic_width = upload_result['width']
         db.session.commit()
         res['msg'] = "success"
         res['url'] = upload_result['url']
+        res['height'] = upload_result['height']
+        res['width'] = upload_result['width']
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
         return jsonify(res) , 200
     return jsonify(res) , 400
@@ -359,6 +369,8 @@ def upload_file():
         # db.session.commit()
         res['msg'] = "success"
         res['url'] = upload_result['url']
+        res['height'] = upload_result['height']
+        res['width'] = upload_result['width']
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
         return jsonify(res) , 200
     return jsonify(res) , 400
@@ -393,6 +405,8 @@ def request_help():
         paytm = data['paytm']        
         phone_pay = data['phone_pay']
         image = data['file']
+        image_height=data['height']
+        image_width=data['width']
         res = {}
         user = UserRequest(request_type = category_help , 
                            title = title,
@@ -407,6 +421,8 @@ def request_help():
                            paytm = paytm,
                            phone_pay = phone_pay,
                            image = image,
+                           height = image_height,
+                           width = image_width,
                            status = "PENDING",
                            user_id = current_user.id)
         db.session.add(user)
@@ -454,23 +470,13 @@ import subprocess
 def notification():
     email =  current_user.email
     fcm_token = UserFcms.query.filter_by(email = email).first().fcm_token
-    print(fcm_token)
-    # if the script don't need output.
-    result = subprocess.run(
-        ['php', './form/notification.php'],    # program and arguments
-        stdout=subprocess.PIPE,  # capture stdout
-        check=True               # raise exception if program fails
-    )
-    # print(result)
+    userdata = {"fcm":fcm_token , "body" : "Your Ally is calling :)" , "image" :"https://res.cloudinary.com/riz0000000001/image/upload/v1626701718/ra3zaagudnzvmfttwqeb.png"}
+    resp = requests.post('https://warm-forest-06132.herokuapp.com', params=userdata)
     return jsonify('notification sent' ) , 200
 
-def notify(msg):
-    # if the script don't need output.
-    result = subprocess.run(
-        ['php', './form/notification.php'],    # program and arguments
-        stdout=subprocess.PIPE,  # capture stdout
-        check=True               # raise exception if program fails
-    )
+def notify(fcm_token ,msg , image):
+    userdata = {"fcm":fcm_token , "body" :msg , "image" :image}
+    resp = requests.post('https://warm-forest-06132.herokuapp.com', params=userdata)
 ###aadmin panel###
 @login_required
 @app.route('/pending_requests' , methods = ['GET'])
@@ -492,7 +498,9 @@ def pending_requests():
                 "upi_id":req.upi_id,
                 "paytm": req.paytm,
                 "phone_pay":req.phone_pay,
-                "image":req.image
+                "image":req.image,
+                "image_height":req.height,
+                "image_width":req.width
             }
         )
     return jsonify(res) , 200
@@ -510,7 +518,12 @@ def requests_status():
     db.session.commit()
     res= {'msg' : "Your help request is" + request_status}
     if(request_status == "ACCEPTED"):
-        notify(res['msg'])
+        for user in User.query.all():
+            if((user.id == current_user.id)):
+                notify(user , res['msg'] , req.image)
+            else:
+                notify(user ,"Somebody needs your help :)" , "http://res.cloudinary.com/riz0000000001/image/upload/v1626701718/ra3zaagudnzvmfttwqeb.png")
+            
     return res , 200
 
 @login_required
@@ -535,6 +548,8 @@ def posts():
                 "paytm": req.paytm,
                 "phone_pay":req.phone_pay,
                 "image":req.image,
+                "image_ht":req.height,
+                "image_width":req.width,
                 "amazon_pay":req.amazon_pay,
                 "gpay":req.gpay
             }
@@ -562,6 +577,8 @@ def my_requests():
                 "paytm": req.paytm,
                 "phone_pay":req.phone_pay,
                 "image":req.image,
+                "image_ht":req.height,
+                "image_width":req.width,
                 "amazon_pay":req.amazon_pay,
                 "gpay":req.gpay
             }

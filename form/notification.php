@@ -1,16 +1,21 @@
 <?php
-define('API_ACCESS_KEY','Api key from Fcm add here');
+define('API_ACCESS_KEY',"AAAAtO89RoI:APA91bF_RzRK7jw3kfKFWCjsqwcpgGmcadZziSfAk6KC5ertG9TzQ8QrJM3HU63YNuNx-edjH59uHRfktqT4laq_k0kDdAAyz_xODrjtbJVjkzZpn9GxUhGsVaAoJPM0oplpNiaGHe_L");
  $fcmUrl = 'https://fcm.googleapis.com/fcm/send';
- $token='235zgagasd634sdgds46436';
+ $token='dE5W3wQrTheFPbNZo6ciFK:APA91bFxOmLbt_fAruZHzJLKiOXjA4uREXlrEfENdDo-pu4vEJhypMJWxNx1doYTMiB6QU2bnLOwVFh5dxmPjvmF-qPBh7W6undVh4MhQk4LrROcDs7kzddk_MS8j9dma5Djj6LHj4yO';
 
     $notification = [
-            'title' =>'title',
-            'body' => 'body of message.',
+            'title' =>'ALLY',
+            'body' => 'hello you got a notification',
             'icon' =>'myIcon', 
-            'sound' => 'mySound'
+            'sound' => 'mySound',
+            'image' => 'http://res.cloudinary.com/riz0000000001/image/upload/v1626265739/lffkokrcxekzpl1xt357.jpg'
         ];
-        $extraNotificationData = ["message" => $notification,"moredata" =>'dd'];
+        echo $notification['title'];
+        echo $notification['body'];
+        echo $notification['icon'];
+        echo $notification['sound'];
 
+        $extraNotificationData = ["data" => $notification];
         $fcmNotification = [
             //'registration_ids' => $tokenList, //multple token array
             'to'        => $token, //single token
@@ -25,6 +30,8 @@ define('API_ACCESS_KEY','Api key from Fcm add here');
 
 
         $ch = curl_init();
+        echo $ch;
+        echo "hey";
         curl_setopt($ch, CURLOPT_URL,$fcmUrl);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);

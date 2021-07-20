@@ -21,7 +21,6 @@ Jinja2==3.0.1
 Mako==1.1.4
 MarkupSafe==2.0.1
 mysqlclient==2.0.3
-pusher-push-notifications==2.0.1
 pycparser==2.20
 PyJWT==2.1.0
 PyMySQL==1.0.2

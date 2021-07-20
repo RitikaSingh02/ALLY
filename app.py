@@ -516,13 +516,18 @@ def requests_status():
     req.status = request_status
     req.remark = remark
     db.session.commit()
+    curr_user = req.user_id
     res= {'msg' : "Your help request is" + request_status}
     if(request_status == "ACCEPTED"):
         for user in User.query.all():
-            if((user.id == current_user.id)):
+            if((user.id == curr_user)):
                 notify(user , res['msg'] , req.image)
             else:
                 notify(user ,"Somebody needs your help :)" , "http://res.cloudinary.com/riz0000000001/image/upload/v1626701718/ra3zaagudnzvmfttwqeb.png")
+    if(request_status == "REJECTED"):
+        for user in User.query.all():
+            if((user.id == curr_user)):
+                notify(user , res['msg'] , req.image)
             
     return res , 200
 
